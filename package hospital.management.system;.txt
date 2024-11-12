@@ -1,0 +1,627 @@
+package hospital.management.system;
+
+import javax.swing.*;
+import java.awt.*;
+
+public class Login extends JFrame {
+
+    JTextField textField;
+    JPasswordField jPasswordField;
+    JButton b1,b2;
+    Login(){
+
+        JLabel namelabel = new JLabel("Username");
+        namelabel.setBounds(40,20,100,30);
+        namelabel.setFont(new Font("Tahoma",Font.BOLD,16));
+        namelabel.setForeground(Color.WHITE);
+        add(namelabel);
+
+        JLabel password = new JLabel("Password");
+        password.setBounds(40,70,100,30);
+        password.setFont(new Font("Tahoma",Font.BOLD,16));
+        password.setForeground(Color.WHITE);
+        add(password);
+
+        textField = new JTextField();
+        textField.setBounds(150,20,150,30);
+        textField.setFont(new Font("Tahoma",Font.BOLD,15));
+        textField.setBackground(new Color(255,179,0));
+        add(textField);
+
+        jPasswordField = new JPasswordField();
+        jPasswordField.setBounds(150,70,150,30);
+        jPasswordField.setFont(new Font("Tahoma",Font.PLAIN,15));
+        jPasswordField.setBackground(new Color(255,179,0));
+        add(jPasswordField);
+
+
+        ImageIcon imageIcon = new ImageIcon(ClassLoader.getSystemResource("icon/login.png"));
+        Image i1 = imageIcon.getImage().getScaledInstance(500,500,Image.SCALE_DEFAULT);
+        ImageIcon imageIcon1 = new ImageIcon(i1);
+        JLabel label = new JLabel(imageIcon1);
+        label.setBounds(320,-30,400,300);
+        add(label);
+
+        b1 = new JButton("Login");
+        b1.setBounds(40,140,120,30);
+        b1.setFont(new Font("serif",Font.BOLD,15));
+        b1.setBackground(Color.DARK_GRAY);
+        b1.setForeground(Color.BLACK);
+        add(b1);
+
+
+        b2 = new JButton("Cancel");
+        b2.setBounds(180,140,120,30);
+        b2.setFont(new Font("serif",Font.BOLD,15));
+        b2.setBackground(Color.DARK_GRAY);
+        b2.setForeground(Color.BLACK);
+        add(b2);
+
+        getContentPane().setBackground(new Color(109,164,170));
+        setSize(720,300);
+        setLocation(400,270);
+        setLayout(null);
+        setVisible(true);
+
+    }
+    public static void main(String[] args){
+        new Login();
+    }
+}
+// Database Schema (MySQL)
+CREATE DATABASE hospital_management;
+USE hospital_management;
+
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE departments (
+    dept_id INT PRIMARY KEY AUTO_INCREMENT,
+    dept_name VARCHAR(100) NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE rooms (
+    room_id INT PRIMARY KEY AUTO_INCREMENT,
+    room_number VARCHAR(20) UNIQUE NOT NULL,
+    room_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'AVAILABLE',
+    dept_id INT,
+    FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+);
+
+CREATE TABLE patients (
+    patient_id INT PRIMARY KEY AUTO_INCREMENT,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    dob DATE NOT NULL,
+    gender VARCHAR(10),
+    contact_number VARCHAR(15),
+    address TEXT,
+    admission_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    discharge_date DATETIME,
+    room_id INT,
+    status VARCHAR(20) DEFAULT 'ADMITTED',
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id)
+);
+
+// Java Models
+public class Patient {
+    private int patientId;
+    private String firstName;
+    private String lastName;
+    private LocalDate dob;
+    private String gender;
+    private String contactNumber;
+    private String address;
+    private LocalDateTime admissionDate;
+    private LocalDateTime dischargeDate;
+    private int roomId;
+    private String status;
+    
+    // Getters and setters
+}
+
+public class Room {
+    private int roomId;
+    private String roomNumber;
+    private String roomType;
+    private String status;
+    private int departmentId;
+    
+    // Getters and setters
+}
+
+// DAO Layer
+public class PatientDAO {
+    private Connection connection;
+    
+    public PatientDAO(Connection connection) {
+        this.connection = connection;
+    }
+    
+    public void addPatient(Patient patient) throws SQLException {
+        String sql = "INSERT INTO patients (first_name, last_name, dob, gender, contact_number, address, room_id) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, patient.getFirstName());
+            stmt.setString(2, patient.getLastName());
+            stmt.setDate(3, Date.valueOf(patient.getDob()));
+            stmt.setString(4, patient.getGender());
+            stmt.setString(5, patient.getContactNumber());
+            stmt.setString(6, patient.getAddress());
+            stmt.setInt(7, patient.getRoomId());
+            stmt.executeUpdate();
+        }
+    }
+    
+    public void updatePatient(Patient patient) throws SQLException {
+        String sql = "UPDATE patients SET first_name=?, last_name=?, contact_number=?, address=? " +
+                    "WHERE patient_id=?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, patient.getFirstName());
+            stmt.setString(2, patient.getLastName());
+            stmt.setString(3, patient.getContactNumber());
+            stmt.setString(4, patient.getAddress());
+            stmt.setInt(5, patient.getPatientId());
+            stmt.executeUpdate();
+        }
+    }
+    
+    public void dischargePatient(int patientId) throws SQLException {
+        String sql = "UPDATE patients SET discharge_date=CURRENT_TIMESTAMP, status='DISCHARGED' WHERE patient_id=?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, patientId);
+            stmt.executeUpdate();
+        }
+    }
+    
+    public Patient getPatientById(int patientId) throws SQLException {
+        String sql = "SELECT * FROM patients WHERE patient_id=?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, patientId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return mapResultSetToPatient(rs);
+            }
+        }
+        return null;
+    }
+    
+    private Patient mapResultSetToPatient(ResultSet rs) throws SQLException {
+        Patient patient = new Patient();
+        patient.setPatientId(rs.getInt("patient_id"));
+        patient.setFirstName(rs.getString("first_name"));
+        patient.setLastName(rs.getString("last_name"));
+        patient.setDob(rs.getDate("dob").toLocalDate());
+        patient.setGender(rs.getString("gender"));
+        patient.setContactNumber(rs.getString("contact_number"));
+        patient.setAddress(rs.getString("address"));
+        patient.setAdmissionDate(rs.getTimestamp("admission_date").toLocalDateTime());
+        Timestamp dischargeDate = rs.getTimestamp("discharge_date");
+        if (dischargeDate != null) {
+            patient.setDischargeDate(dischargeDate.toLocalDateTime());
+        }
+        patient.setRoomId(rs.getInt("room_id"));
+        patient.setStatus(rs.getString("status"));
+        return patient;
+    }
+}
+// Database Schema Additions
+CREATE TABLE room_types (
+    type_id INT PRIMARY KEY AUTO_INCREMENT,
+    type_name VARCHAR(50) NOT NULL,
+    rate_per_day DECIMAL(10,2) NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE bills (
+    bill_id INT PRIMARY KEY AUTO_INCREMENT,
+    patient_id INT NOT NULL,
+    admission_date DATETIME NOT NULL,
+    discharge_date DATETIME,
+    room_charges DECIMAL(10,2) DEFAULT 0,
+    medicine_charges DECIMAL(10,2) DEFAULT 0,
+    doctor_charges DECIMAL(10,2) DEFAULT 0,
+    other_charges DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(10,2) DEFAULT 0,
+    payment_status VARCHAR(20) DEFAULT 'PENDING',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(patient_id)
+);
+
+CREATE TABLE bill_items (
+    item_id INT PRIMARY KEY AUTO_INCREMENT,
+    bill_id INT NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    quantity INT NOT NULL,
+    rate DECIMAL(10,2) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    item_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bill_id) REFERENCES bills(bill_id)
+);
+
+// Room Department Model
+public class RoomType {
+    private int typeId;
+    private String typeName;
+    private BigDecimal ratePerDay;
+    private String description;
+    
+    // Getters and setters
+}
+
+public class Room {
+    private int roomId;
+    private String roomNumber;
+    private RoomType roomType;
+    private String status; // AVAILABLE, OCCUPIED, MAINTENANCE
+    private int departmentId;
+    private String departmentName;
+    
+    // Getters and setters
+}
+
+// Billing Models
+public class Bill {
+    private int billId;
+    private int patientId;
+    private LocalDateTime admissionDate;
+    private LocalDateTime dischargeDate;
+    private BigDecimal roomCharges;
+    private BigDecimal medicineCharges;
+    private BigDecimal doctorCharges;
+    private BigDecimal otherCharges;
+    private BigDecimal totalAmount;
+    private String paymentStatus;
+    private List<BillItem> billItems;
+    
+    // Getters and setters
+}
+
+public class BillItem {
+    private int itemId;
+    private int billId;
+    private String description;
+    private int quantity;
+    private BigDecimal rate;
+    private BigDecimal amount;
+    private LocalDateTime itemDate;
+    
+    // Getters and setters
+}
+
+// Room DAO
+public class RoomDAO {
+    private Connection connection;
+    
+    public RoomDAO(Connection connection) {
+        this.connection = connection;
+    }
+    
+    public List<Room> getAvailableRooms() throws SQLException {
+        String sql = "SELECT r.*, rt.type_name, rt.rate_per_day, d.dept_name " +
+                    "FROM rooms r " +
+                    "JOIN room_types rt ON r.room_type = rt.type_id " +
+                    "JOIN departments d ON r.dept_id = d.dept_id " +
+                    "WHERE r.status = 'AVAILABLE'";
+        
+        List<Room> rooms = new ArrayList<>();
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                rooms.add(mapResultSetToRoom(rs));
+            }
+        }
+        return rooms;
+    }
+    
+    public void updateRoomStatus(int roomId, String status) throws SQLException {
+        String sql = "UPDATE rooms SET status = ? WHERE room_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, status);
+            stmt.setInt(2, roomId);
+            stmt.executeUpdate();
+        }
+    }
+    
+    private Room mapResultSetToRoom(ResultSet rs) throws SQLException {
+        Room room = new Room();
+        room.setRoomId(rs.getInt("room_id"));
+        room.setRoomNumber(rs.getString("room_number"));
+        room.setStatus(rs.getString("status"));
+        room.setDepartmentId(rs.getInt("dept_id"));
+        room.setDepartmentName(rs.getString("dept_name"));
+        
+        RoomType roomType = new RoomType();
+        roomType.setTypeId(rs.getInt("type_id"));
+        roomType.setTypeName(rs.getString("type_name"));
+        roomType.setRatePerDay(rs.getBigDecimal("rate_per_day"));
+        room.setRoomType(roomType);
+        
+        return room;
+    }
+}
+
+// Billing DAO
+public class BillingDAO {
+    private Connection connection;
+    
+    public BillingDAO(Connection connection) {
+        this.connection = connection;
+    }
+    
+    public Bill createBill(int patientId, LocalDateTime admissionDate) throws SQLException {
+        String sql = "INSERT INTO bills (patient_id, admission_date) VALUES (?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setInt(1, patientId);
+            stmt.setTimestamp(2, Timestamp.valueOf(admissionDate));
+            stmt.executeUpdate();
+            
+            ResultSet rs = stmt.getGeneratedKeys();
+            if (rs.next()) {
+                return getBillById(rs.getInt(1));
+            }
+        }
+        return null;
+    }
+    
+    public void addBillItem(BillItem item) throws SQLException {
+        String sql = "INSERT INTO bill_items (bill_id, description, quantity, rate, amount) " +
+                    "VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, item.getBillId());
+            stmt.setString(2, item.getDescription());
+            stmt.setInt(3, item.getQuantity());
+            stmt.setBigDecimal(4, item.getRate());
+            stmt.setBigDecimal(5, item.getAmount());
+            stmt.executeUpdate();
+            
+            updateBillTotal(item.getBillId());
+        }
+    }
+    
+    private void updateBillTotal(int billId) throws SQLException {
+        String sql = "UPDATE bills b SET " +
+                    "total_amount = (SELECT SUM(amount) FROM bill_items WHERE bill_id = ?) " +
+                    "WHERE bill_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, billId);
+            stmt.setInt(2, billId);
+            stmt.executeUpdate();
+        }
+    }
+    
+    public Bill getBillById(int billId) throws SQLException {
+        String sql = "SELECT * FROM bills WHERE bill_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, billId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                Bill bill = mapResultSetToBill(rs);
+                bill.setBillItems(getBillItems(billId));
+                return bill;
+            }
+        }
+        return null;
+    }
+    
+    private List<BillItem> getBillItems(int billId) throws SQLException {
+        String sql = "SELECT * FROM bill_items WHERE bill_id = ?";
+        List<BillItem> items = new ArrayList<>();
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, billId);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                items.add(mapResultSetToBillItem(rs));
+            }
+        }
+        return items;
+    }
+    
+    private Bill mapResultSetToBill(ResultSet rs) throws SQLException {
+        Bill bill = new Bill();
+        bill.setBillId(rs.getInt("bill_id"));
+        bill.setPatientId(rs.getInt("patient_id"));
+        bill.setAdmissionDate(rs.getTimestamp("admission_date").toLocalDateTime());
+        Timestamp dischargeDate = rs.getTimestamp("discharge_date");
+        if (dischargeDate != null) {
+            bill.setDischargeDate(dischargeDate.toLocalDateTime());
+        }
+        bill.setRoomCharges(rs.getBigDecimal("room_charges"));
+        bill.setMedicineCharges(rs.getBigDecimal("medicine_charges"));
+        bill.setDoctorCharges(rs.getBigDecimal("doctor_charges"));
+        bill.setOtherCharges(rs.getBigDecimal("other_charges"));
+        bill.setTotalAmount(rs.getBigDecimal("total_amount"));
+        bill.setPaymentStatus(rs.getString("payment_status"));
+        return bill;
+    }
+    
+    private BillItem mapResultSetToBillItem(ResultSet rs) throws SQLException {
+        BillItem item = new BillItem();
+        item.setItemId(rs.getInt("item_id"));
+        item.setBillId(rs.getInt("bill_id"));
+        item.setDescription(rs.getString("description"));
+        item.setQuantity(rs.getInt("quantity"));
+        item.setRate(rs.getBigDecimal("rate"));
+        item.setAmount(rs.getBigDecimal("amount"));
+        item.setItemDate(rs.getTimestamp("item_date").toLocalDateTime());
+        return item;
+    }
+}
+// room-management.js
+class RoomManager {
+    static async getAllRooms() {
+        const response = await fetch('/api/rooms', {
+            headers: {
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            }
+        });
+        return await response.json();
+    }
+    
+    static async updateRoomStatus(roomId, status) {
+        const response = await fetch(/api/rooms/${roomId}/status, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            },
+            body: JSON.stringify({ status })
+        });
+        return await response.json();
+    }
+}
+
+// billing-management.js
+class BillingManager {
+    static async createBill(patientId) {
+        const response = await fetch('/api/bills', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            },
+            body: JSON.stringify({ patientId })
+        });
+        return await response.json();
+    }
+    
+    static async addBillItem(billId, itemData) {
+        const response = await fetch(/api/bills/${billId}/items, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            },
+            body: JSON.stringify(itemData)
+        });
+        return await response.json();
+    }
+    
+    static async getBill(billId) {
+        const response = await fetch(/api/bills/${billId}, {
+            headers: {
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            }
+        });
+        return await response.json();
+    }
+    
+    static async updatePaymentStatus(billId, status) {
+        const response = await fetch(/api/bills/${billId}/payment-status, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': Bearer ${localStorage.getItem('token')}
+            },
+            body: JSON.stringify({ status })
+        });
+        return await response.json();
+    }
+}
+
+// Initialize room management page
+document.addEventListener('DOMContentLoaded', async () => {
+    if (document.getElementById('roomManagement')) {
+        const rooms = await RoomManager.getAllRooms();
+        displayRooms(rooms);
+    }
+});
+
+// Display rooms in a grid
+function displayRooms(rooms) {
+    const container = document.getElementById('roomsGrid');
+    container.innerHTML = '';
+    
+    rooms.forEach(room => {
+        const roomElement = document.createElement('div');
+        roomElement.className = room-card ${room.status.toLowerCase()};
+        roomElement.innerHTML = `
+            <h3>Room ${room.roomNumber}</h3>
+            <p>Type: ${room.roomType.typeName}</p>
+            <p>Rate: $${room.roomType.ratePerDay}/day</p>
+            <p>Status: ${room.status}</p>
+            <p>Department: ${room.departmentName}</p>
+            ${room.status === 'AVAILABLE' ? 
+                <button onclick="assignRoom(${room.roomId})">Assign Room</button> : 
+                <button onclick="markAvailable(${room.roomId})">Mark Available</button>
+            }
+        `;
+        container.appendChild(roomElement);
+    });
+}
+
+// Initialize billing page
+document.addEventListener('DOMContentLoaded', async () => {
+    if (document.getElementById('billingManagement')) {
+        setupBillingForm();
+    }
+});
+
+// Setup billing form handlers
+function setupBillingForm() {
+    const billForm = document.getElementById('billItemForm');
+    if (billForm) {
+        billForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(billForm);
+            const itemData = {
+                description: formData.get('description'),
+                quantity: parseInt(formData.get('quantity')),
+                rate: parseFloat(formData.get('rate')),
+                amount: parseFloat(formData.get('quantity')) * parseFloat(formData.get('rate'))
+            };
+            
+            const billId = formData.get('billId');
+            try {
+                await BillingManager.addBillItem(billId, itemData);
+                await refreshBillDetails(billId);
+                billForm.reset();
+            } catch (error) {
+                console.error('Error adding bill item:', error);
+                alert('Failed to add bill item');
+            }
+        });
+    }
+}
+
+// Refresh bill details
+async function refreshBillDetails(billId) {
+    const bill = await BillingManager.getBill(billId);
+    displayBillDetails(bill);
+}
+
+// Display bill details
+function displayBillDetails(bill) {
+    const container = document.getElementById('billDetails');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <h3>Bill #${bill.billId}</h3>
+        <p>Patient ID: ${bill.patientId}</p>
+        <p>Admission Date: ${new Date(bill.admissionDate).toLocaleDateString()}</p>
+        <p>Status: ${bill.paymentStatus}</p>
+        
+        <h4>Items</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${bill.billItems.map(item => `
+                    <tr>
+                        <td>${item.description}</td>
+                        <td>${item.quantity}</td>
+                        <td>$${item.rate}
